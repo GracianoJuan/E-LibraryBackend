@@ -113,7 +113,7 @@ async def migrate_csv_to_database():
                 image_url=image_url,
                 description=description if description else None,
                 publish_year=publish_year_int,
-                content_file="content/lorem_ipsum_book.pdf",
+                content_file="content/lorem_ipsum_book/",
                 total_likes=0,
                 total_readers=0,
             )

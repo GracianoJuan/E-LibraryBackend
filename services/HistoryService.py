@@ -34,7 +34,7 @@ class HistoryService:
             from services.RecService import RecommendationService
 
             await RecommendationService.generate_recommendations_from_history(
-                session, user_id, existing_history.id, top_n=5
+                session, user_id, existing_history.id, top_n=10
             )
             return existing_history
 
@@ -53,7 +53,7 @@ class HistoryService:
         from services.RecService import RecommendationService
 
         await RecommendationService.generate_recommendations_from_history(
-            session, user_id, history.id, top_n=5
+            session, user_id, history.id, top_n=10
         )
         return history
 
@@ -80,7 +80,7 @@ class HistoryService:
 
         from services.RecService import RecommendationService
 
-        await RecommendationService.rebuild_user_recommendations(session, user_id, top_n=5)
+        await RecommendationService.rebuild_user_recommendations(session, user_id, top_n=10)
         return True
 
     @staticmethod

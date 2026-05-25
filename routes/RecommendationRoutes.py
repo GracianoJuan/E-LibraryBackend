@@ -13,7 +13,7 @@ router = APIRouter(tags=["recommendations"])
 
 @router.get("/recommendations", response_model=list[BookRead])
 async def get_recommendations(
-    limit: int = 15,
+    limit: int = 10,
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
