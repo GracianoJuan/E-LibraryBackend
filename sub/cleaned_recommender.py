@@ -17,7 +17,7 @@ except ImportError:  # pragma: no cover - notebook dependency check handles this
 
 
 BASE_DIR = Path(__file__).resolve().parent
-DATA_PATH = BASE_DIR / "books_cleaned.csv"
+DATA_PATH = BASE_DIR / "books_cleaned_updated.csv"
 SENTENCE_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 SENTENCE_MODEL_CACHE_DIR = BASE_DIR / "models" / "all-MiniLM-L6-v2"
 
