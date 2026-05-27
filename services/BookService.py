@@ -52,6 +52,20 @@ class BookService:
         return result.scalars().first() is not None
 
     @staticmethod
+    async def get_user_likes(
+        session: AsyncSession, user_id: int, limit: int = 100
+    ) -> list[Like]:
+        """Get a user's liked books ordered by latest like action."""
+        statement = (
+            select(Like)
+            .where(Like.user_id == user_id)
+            .order_by(Like.created_at.desc())
+            .limit(limit)
+        )
+        result = await session.execute(statement)
+        return result.scalars().all()
+
+    @staticmethod
     async def unlike_book(session: AsyncSession, book_id: int, user_id: int) -> Book:
         """Remove a like for the user and decrement total_likes when needed."""
         book = await session.get(Book, book_id)
@@ -238,6 +252,8 @@ class BookService:
             pattern = f"%{normalized_query}%"
             if normalized_field == "publisher":
                 statement = statement.where(Publisher.name.ilike(pattern))
+            elif normalized_field == "title":
+                statement = statement.where(Book.title.ilike(pattern))
             else:
                 statement = statement.where(Author.name.ilike(pattern))
 

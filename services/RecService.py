@@ -8,30 +8,17 @@ from models.history import History
 from models.recommendation import Recommendation
 from models.book import Book
 
-from sub.cleaned_recommender import (
-    CleanedGenreDescriptionRecommender,
-    load_books,
-)
+import sys
+
+# Add cbf to path
+cbf_path = Path(__file__).parent.parent / "cbf"
+sys.path.insert(0, str(cbf_path))
 
 
 class RecommendationService:
     """Service for managing book recommendations"""
 
     _cbf_model = None
-
-    @classmethod
-    async def initialize_cbf(cls):
-        """Initialize the CBF model (call once on startup)"""
-        if cls._cbf_model is None:
-            try:
-                cleaned_data_path = Path(__file__).resolve().parent.parent / "sub" / "books_cleaned.csv"
-                books_frame = load_books(cleaned_data_path)
-                model = CleanedGenreDescriptionRecommender()
-                model.fit(books_frame)
-                cls._cbf_model = model
-            except Exception as e:
-                print(f"Warning: Could not initialize CBF model: {e}")
-                cls._cbf_model = None
 
     @staticmethod
     async def _resolve_book_id_by_title(session: AsyncSession, title: str) -> int | None:
@@ -231,7 +218,7 @@ class RecommendationService:
         cls,
         session: AsyncSession,
         user_id: int,
-        top_n: int = 10,
+        top_n: int = 5,
     ) -> list[Recommendation]:
         statement = delete(Recommendation).where(Recommendation.user_id == user_id)
         await session.execute(statement)
@@ -261,7 +248,7 @@ class RecommendationService:
 
     @staticmethod
     async def get_user_recommendations(
-        session: AsyncSession, user_id: int, limit: int = 10
+        session: AsyncSession, user_id: int, limit: int = 15
     ) -> list[tuple[Recommendation, Book]]:
         """Get recommendations for a user with their book details, sorted by similarity score"""
         await RecommendationService._prune_read_recommendations(session, user_id)

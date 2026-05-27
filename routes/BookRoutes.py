@@ -1,5 +1,4 @@
 from pathlib import Path
-import mimetypes
 
 from fastapi import APIRouter, HTTPException, Depends, status
 from fastapi.responses import FileResponse
@@ -7,7 +6,7 @@ from pydantic import BaseModel, Field
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from db import get_session
-from models.book import BookRead, BookCreate, Book
+from models.book import BookRead, BookCreate
 from models.user import User
 from services.BookService import BookService
 from services.HistoryService import HistoryService
@@ -33,6 +32,12 @@ class BookRecommendationQuery(BaseModel):
     threshold: float = 0.25
 
 
+class LikedBookResponse(BaseModel):
+    id: int
+    created_at: str
+    book: "BookDetailResponse"
+
+
 class BookDetailResponse(BaseModel):
     id: int
     title: str
@@ -46,11 +51,6 @@ class BookDetailResponse(BaseModel):
     content_file: str | None = None
     total_likes: int
     total_readers: int
-
-
-class BookContentResponse(BaseModel):
-    id: int
-    page_numbers: list[int] = Field(default_factory=list)
 
 
 @router.get("/genres", response_model=list[str])
@@ -88,61 +88,6 @@ async def explore_books(
 
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
-IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp", ".gif")
-
-
-def _resolve_book_content_directory(book: Book) -> Path:
-    if not book.content_file:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Book has no content file",
-        )
-
-    candidate = (BACKEND_ROOT / book.content_file).resolve()
-    try:
-        candidate.relative_to(BACKEND_ROOT)
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid content file path",
-        ) from exc
-
-    if not candidate.exists() or not candidate.is_dir():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Book content directory not found",
-        )
-
-    return candidate
-
-
-def _list_page_numbers(content_directory: Path) -> list[int]:
-    pages: list[int] = []
-    for item in content_directory.iterdir():
-        if not item.is_file() or item.suffix.lower() not in IMAGE_EXTENSIONS:
-            continue
-
-        try:
-            page_number = int(item.stem)
-        except ValueError:
-            continue
-
-        pages.append(page_number)
-
-    return sorted(set(pages))
-
-
-def _resolve_page_file(content_directory: Path, page_number: int) -> Path | None:
-    for extension in IMAGE_EXTENSIONS:
-        candidate = content_directory / f"{page_number}{extension}"
-        if candidate.exists() and candidate.is_file():
-            return candidate
-
-    for item in content_directory.iterdir():
-        if item.is_file() and item.stem == str(page_number):
-            return item
-
-    return None
 
 
 @router.get("/most-liked", response_model=list[BookDetailResponse])
@@ -165,6 +110,31 @@ async def get_most_read_books(
         limit = 100
     books = await BookService.get_most_read_books_with_details(session, limit)
     return books
+
+
+@router.get("/liked")
+async def get_liked_books(
+    limit: int = 100,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Get the current user's liked books with details."""
+    if limit > 500:
+        limit = 500
+
+    likes = await BookService.get_user_likes(session, current_user.id, limit)
+    response = []
+    for like in likes:
+        book_details = await BookService.get_book_by_id_with_details(like.book_id, session)
+        if not book_details:
+            continue
+        response.append({
+            "id": like.id,
+            "created_at": like.created_at,
+            "book": book_details,
+        })
+
+    return response
 
 
 @router.get("/{book_id}", response_model=BookDetailResponse)
@@ -208,49 +178,6 @@ async def get_book_recommendations(
             result.append(book)
 
     return result
-
-
-@router.get("/{book_id}/content", response_model=BookContentResponse)
-async def get_book_content(
-    book_id: int,
-    session: AsyncSession = Depends(get_session),
-):
-    book = await BookService.get_book_by_id(session, book_id)
-    if not book:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Book not found")
-
-    content_directory = _resolve_book_content_directory(book)
-    page_numbers = _list_page_numbers(content_directory)
-    if not page_numbers:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No page images found for this book",
-        )
-
-    return BookContentResponse(id=book.id, page_numbers=page_numbers)
-
-
-@router.get("/{book_id}/content/{page_number}")
-async def get_book_content_page(
-    book_id: int,
-    page_number: int,
-    session: AsyncSession = Depends(get_session),
-):
-    book = await BookService.get_book_by_id(session, book_id)
-    if not book:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Book not found")
-
-    content_directory = _resolve_book_content_directory(book)
-    page_file = _resolve_page_file(content_directory, page_number)
-    if not page_file:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Page image not found")
-
-    media_type, _ = mimetypes.guess_type(page_file.name)
-    return FileResponse(
-        page_file,
-        media_type=media_type or "image/jpeg",
-        filename=page_file.name,
-    )
 
 
 @router.get("/{book_id}/pdf")
