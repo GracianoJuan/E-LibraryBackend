@@ -20,6 +20,31 @@ class RecommendationService:
 
     _cbf_model = None
 
+    @classmethod
+    async def initialize_cbf(cls) -> None:
+        """Lazily initialize the content-based recommender model from
+        `sub/cleaned_recommender.py`. This method is async because callers
+        await it, but initialization runs synchronously.
+        """
+        if cls._cbf_model is not None:
+            return
+
+        try:
+            # Try importing the cleaned recommender from the expected package
+            from sub.cleaned_recommender import (
+                    CleanedGenreDescriptionRecommender,
+                    load_books,
+                )
+
+            # Load the book dataframe and fit the model
+            df = load_books()
+            model = CleanedGenreDescriptionRecommender()
+            model.fit(df)
+            cls._cbf_model = model
+        except Exception as e:
+            print(f"Warning: Failed to initialize CBF model: {e}")
+            cls._cbf_model = None
+
     @staticmethod
     async def _resolve_book_id_by_title(session: AsyncSession, title: str) -> int | None:
         normalized_title = title.strip().lower()

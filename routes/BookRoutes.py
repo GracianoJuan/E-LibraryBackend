@@ -180,32 +180,91 @@ async def get_book_recommendations(
     return result
 
 
-@router.get("/{book_id}/pdf")
-async def get_book_pdf(
-    book_id: int,
-    session: AsyncSession = Depends(get_session),
+@router.get("/{book_id}/content")
+async def get_book_content_info(
+    book_id: int, session: AsyncSession = Depends(get_session)
 ):
-    """Serve the PDF file configured in content_file for a given book."""
+    """Return basic content info (available page numbers) for a book.
+    The implementation supports two storage layouts:
+    - `content/<name>.pdf` with a sibling directory `content/<name>/` containing per-page images
+    - `content/<name>/` directory directly containing per-page images
+    """
     book = await BookService.get_book_by_id(session, book_id)
     if not book:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Book not found")
 
     if not book.content_file:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Book has no content file",
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Book has no content file")
 
     candidate = (BACKEND_ROOT / book.content_file).resolve()
     try:
         candidate.relative_to(BACKEND_ROOT)
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid content file path") from exc
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid content file path")
 
-    if not candidate.exists() or not candidate.is_file():
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PDF file not found")
+    # Determine image directory
+    image_dir = None
+    if candidate.is_dir():
+        image_dir = candidate
+    else:
+        # if it's a PDF, look for a sibling directory named after the stem
+        if candidate.is_file():
+            sibling = candidate.parent / candidate.stem
+            if sibling.exists() and sibling.is_dir():
+                image_dir = sibling
 
-    return FileResponse(candidate, media_type="application/pdf", filename=candidate.name)
+    if image_dir is None or not image_dir.exists():
+        # No image directory available; tell client to use PDF endpoint instead
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Content images not found; use PDF endpoint")
+
+    # collect numeric page filenames
+    page_files = sorted([p for p in image_dir.iterdir() if p.is_file() and p.suffix.lower() in (".jpg", ".jpeg", ".png")], key=lambda p: int(p.stem) if p.stem.isdigit() else p.name)
+    page_numbers = [int(p.stem) if p.stem.isdigit() else idx + 1 for idx, p in enumerate(page_files)]
+
+    return {"id": book_id, "page_numbers": page_numbers}
+
+
+@router.get("/{book_id}/content/{page_number}")
+async def get_book_content_page(
+    book_id: int,
+    page_number: int,
+    session: AsyncSession = Depends(get_session),
+):
+    """Return a single content page image for a book."""
+    book = await BookService.get_book_by_id(session, book_id)
+    if not book:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Book not found")
+
+    if not book.content_file:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Book has no content file")
+
+    candidate = (BACKEND_ROOT / book.content_file).resolve()
+    try:
+        candidate.relative_to(BACKEND_ROOT)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid content file path")
+
+    # Find image directory
+    image_dir = None
+    if candidate.is_dir():
+        image_dir = candidate
+    else:
+        if candidate.is_file():
+            sibling = candidate.parent / candidate.stem
+            if sibling.exists() and sibling.is_dir():
+                image_dir = sibling
+
+    if image_dir is None or not image_dir.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Content images not found; use PDF endpoint")
+
+    # try common image extensions
+    for ext in (".jpg", ".jpeg", ".png"):
+        page_file = image_dir / f"{page_number}{ext}"
+        if page_file.exists() and page_file.is_file():
+            media_type = "image/jpeg" if ext in (".jpg", ".jpeg") else "image/png"
+            return FileResponse(page_file, media_type=media_type, filename=page_file.name)
+
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Page image not found")
 
 
 @router.post("/{book_id}/read", status_code=status.HTTP_201_CREATED)
