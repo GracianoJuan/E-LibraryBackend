@@ -1,26 +1,3 @@
-"""
-scraper.py  –  Multi-source book data collector
-================================================================
-Sources  (in priority order for field merging):
-  1. Open Library API  – best for subjects + bulk ISBN coverage
-  2. Goodreads         – best for community genres + cover
-  3. Amazon Books      – supplementary publisher / year data
-
-Output fields per book (published_year filtered to YEAR_MIN..YEAR_MAX):
-  title, author, publisher, published_year, description,
-  cover_image_url, genre  (multi-value, consensus-based), isbn
-
-Usage:
-  python scraper.py
-
-  # Limit total books (for testing):
-  MAX_BOOKS=200 python scraper.py
-
-  # Custom year range:
-  YEAR_MIN=2023 YEAR_MAX=2026 python scraper.py
-================================================================
-"""
-
 from __future__ import annotations
 
 import csv
@@ -91,7 +68,6 @@ QUERIES: List[str] = [
     "education teaching", "nature environment ecology",
 ]
 
-# ── genre taxonomy (specific → broad; order matters) ─────────────────────────
 #   key   = canonical genre name stored in CSV
 #   value = keyword triggers (matched in lowercased combined subject strings)
 GENRE_MAP: Dict[str, List[str]] = {
@@ -166,18 +142,6 @@ class BookRecord:
 # ══════════════════════════════════════════════════════════════════════════════
 
 def fix_encoding(text: str) -> str:
-    """
-    Repair mojibake caused by UTF-8 bytes being mis-decoded as latin-1/cp1252.
-
-    When requests sees no charset in the Content-Type header it defaults to
-    latin-1, turning e.g. the UTF-8 bytes 0xC3 0xB3 (ó) into the two
-    latin-1 characters Ã³.  We detect this by looking for the UTF-8
-    lead-byte / continuation-byte pattern (U+00C2..U+00EF followed by
-    U+0080..U+00BF) and re-encode with the wrong codec then decode as UTF-8.
-
-    Correctly-encoded strings (real accents like café, naïve) pass through
-    unchanged because they don't contain that lead+continuation pattern.
-    """
     if not re.search(r"[\xc2-\xef][\x80-\xbf]", text):
         return text          # fast-path: nothing looks like mojibake
     for wrong_enc in ("latin-1", "cp1252"):
@@ -220,9 +184,6 @@ def pick_isbn(candidates: List[str]) -> Optional[str]:
             or next((x for x in normed if len(x) == 10), None))
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# Genre helpers
-# ══════════════════════════════════════════════════════════════════════════════
 
 def infer_genres(tags: List[str]) -> List[str]:
     """
@@ -254,9 +215,7 @@ def consensus_genres(records: List[BookRecord]) -> List[str]:
     return ordered or ["General"]
 
 
-# ══════════════════════════════════════════════════════════════════════════════
 # HTTP session
-# ══════════════════════════════════════════════════════════════════════════════
 
 BROWSER_HEADERS = {
     "User-Agent": (
@@ -309,9 +268,7 @@ def http_get(session: requests.Session, url: str,
     return None
 
 
-# ══════════════════════════════════════════════════════════════════════════════
 # Source 2 – Open Library API
-# ══════════════════════════════════════════════════════════════════════════════
 _OL_SEARCH = "https://openlibrary.org/search.json"
 _OL_FIELDS = ",".join([
     "key", "title", "author_name", "language",

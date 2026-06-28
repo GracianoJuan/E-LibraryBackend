@@ -12,6 +12,7 @@ class BookBase(SQLModel):
 
 class Book(BookBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
+    lang: Optional[str] = Field(default=None)
     description: Optional[str] = Field(default=None)
     publish_year: Optional[int] = Field(default=None)
     content_file: Optional[str] = Field(default=None)

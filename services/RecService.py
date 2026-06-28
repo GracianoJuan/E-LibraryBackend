@@ -1,4 +1,5 @@
 # Service layer for handling book recommendations
+import importlib
 from pathlib import Path
 
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -18,40 +19,65 @@ sys.path.insert(0, str(cbf_path))
 class RecommendationService:
     """Service for managing book recommendations"""
 
-    _cbf_model = None
+    _cbf_models: dict[str, object] = {}
+
+    @staticmethod
+    def _normalize_lang(lang: str | None) -> str:
+        normalized_lang = str(lang or "").strip().lower()
+        if normalized_lang.startswith("id"):
+            return "id"
+        return "en"
 
     @classmethod
-    async def initialize_cbf(cls) -> None:
+    async def initialize_cbf(cls, lang: str | None = None) -> None:
         """Lazily initialize the content-based recommender model from
         `sub/cleaned_recommender.py`. This method is async because callers
         await it, but initialization runs synchronously.
         """
-        if cls._cbf_model is not None:
+        lang_key = cls._normalize_lang(lang)
+        if cls._cbf_models.get(lang_key) is not None:
             return
 
         try:
-            # Try importing the cleaned recommender from the expected package
-            from sub.cleaned_recommender import (
-                    CleanedGenreDescriptionRecommender,
-                    load_books,
-                )
+            if lang_key == "id":
+                module = importlib.import_module("recommender_id")
+                model = module.RecommendationId()
+            else:
+                module = importlib.import_module("cleaned_recommender")
+                model = module.CleanedGenreDescriptionRecommender()
+
+            load_books = module.load_books
 
             # Load the book dataframe and fit the model
             df = load_books()
-            model = CleanedGenreDescriptionRecommender()
             model.fit(df)
-            cls._cbf_model = model
+            cls._cbf_models[lang_key] = model
         except Exception as e:
             print(f"Warning: Failed to initialize CBF model: {e}")
-            cls._cbf_model = None
+            cls._cbf_models[lang_key] = None
+
+    @classmethod
+    async def _get_cbf_model(cls, lang: str | None = None):
+        lang_key = cls._normalize_lang(lang)
+        if cls._cbf_models.get(lang_key) is None:
+            await cls.initialize_cbf(lang_key)
+        return cls._cbf_models.get(lang_key)
 
     @staticmethod
-    async def _resolve_book_id_by_title(session: AsyncSession, title: str) -> int | None:
+    async def _resolve_book_id_by_title(
+        session: AsyncSession,
+        title: str,
+        lang: str | None = None,
+    ) -> int | None:
         normalized_title = title.strip().lower()
         if not normalized_title:
             return None
 
         statement = select(Book.id).where(func.lower(Book.title) == normalized_title)
+        normalized_lang = RecommendationService._normalize_lang(lang)
+        if normalized_lang in {"en", "id"}:
+            statement = statement.where(func.lower(func.coalesce(Book.lang, "")) == normalized_lang)
+
         result = await session.execute(statement)
         return result.scalar_one_or_none()
 
@@ -107,23 +133,23 @@ class RecommendationService:
         session: AsyncSession,
         user_id: int,
         source_title: str,
+        lang: str | None = None,
         top_n: int = 10,
     ) -> list[Recommendation]:
         recommendations: list[Recommendation] = []
 
-        if cls._cbf_model is None:
-            await cls.initialize_cbf()
+        cbf_model = await cls._get_cbf_model(lang)
 
-        if cls._cbf_model is None:
+        if cbf_model is None:
             return recommendations
 
         try:
-            cbf_recs = cls._cbf_model.get_recommendations(source_title, top_n=top_n)
+            cbf_recs = cbf_model.get_recommendations(source_title, top_n=top_n)
             read_book_ids = await cls._get_user_read_book_ids(session, user_id)
 
             for _, row in cbf_recs.iterrows():
                 rec_title = str(row.get("title", "")).strip()
-                rec_book_id = await cls._resolve_book_id_by_title(session, rec_title)
+                rec_book_id = await cls._resolve_book_id_by_title(session, rec_title, lang=lang)
                 if rec_book_id is None:
                     continue
 
@@ -149,19 +175,18 @@ class RecommendationService:
         threshold: float = 0.25,
         min_results: int = 5,
     ) -> list[int]:
-        if cls._cbf_model is None:
-            await cls.initialize_cbf()
-
-        if cls._cbf_model is None:
-            return []
-
         source_book = await cls._resolve_book_by_id(session, book_id)
         if not source_book:
             return []
 
+        cbf_model = await cls._get_cbf_model(source_book.lang)
+
+        if cbf_model is None:
+            return []
+
         max_candidates = max(limit * 2, 10)
         try:
-            cbf_recs = cls._cbf_model.get_recommendations(source_book.title, top_n=max_candidates)
+            cbf_recs = cbf_model.get_recommendations(source_book.title, top_n=max_candidates)
         except Exception as exc:
             print(f"Warning: Error generating book recommendations: {exc}")
             return []
@@ -172,7 +197,7 @@ class RecommendationService:
 
         for _, row in cbf_recs.iterrows():
             rec_title = str(row.get("title", "")).strip()
-            rec_book_id = await cls._resolve_book_id_by_title(session, rec_title)
+            rec_book_id = await cls._resolve_book_id_by_title(session, rec_title, lang=source_book.lang)
             if rec_book_id is None or rec_book_id in seen_ids:
                 continue
 
@@ -212,6 +237,7 @@ class RecommendationService:
             session,
             user_id,
             book.title,
+            lang=book.lang,
             top_n=top_n,
         )
 
@@ -235,6 +261,7 @@ class RecommendationService:
             session,
             user_id,
             book.title,
+            lang=book.lang,
             top_n=top_n,
         )
 

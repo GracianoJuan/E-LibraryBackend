@@ -50,6 +50,7 @@ def upgrade() -> None:
     op.create_table(
         'book',
         sa.Column('id', sa.Integer(), nullable=False),
+        sa.Column('lang', sa.String(), nullable=True),
         sa.Column('title', sa.String(), nullable=False),
         sa.Column('author_id', sa.Integer(), nullable=True),
         sa.Column('publisher_id', sa.Integer(), nullable=True),
@@ -64,7 +65,6 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(['publisher_id'], ['publisher.id']),
         sa.PrimaryKeyConstraint('id')
     )
-    op.create_index(op.f('ix_book_isbn'), 'book', ['isbn'], unique=True)
 
     # Create History table
     op.create_table(

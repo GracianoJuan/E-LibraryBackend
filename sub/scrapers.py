@@ -1,26 +1,3 @@
-"""
-scraper.py  –  Multi-source book data collector
-================================================================
-Sources  (in priority order for field merging):
-  1. Open Library API  – best for subjects + bulk ISBN coverage
-  2. Goodreads         – best for community genres + cover
-  3. Amazon Books      – supplementary publisher / year data
-
-Output fields per book (published_year filtered to YEAR_MIN..YEAR_MAX):
-  title, author, publisher, published_year, description,
-  cover_image_url, genre  (multi-value, consensus-based), isbn
-
-Usage:
-  python scraper.py
-
-  # Limit total books (for testing):
-  MAX_BOOKS=200 python scraper.py
-
-  # Custom year range:
-  YEAR_MIN=2023 YEAR_MAX=2026 python scraper.py
-================================================================
-"""
-
 from __future__ import annotations
 
 import csv
@@ -79,7 +56,7 @@ QUERIES: List[str] = [
     "fantasy fiction", "science fiction", "mystery thriller", "romance novel",
     "horror fiction", "historical fiction", "literary fiction", "adventure fiction",
     "young adult fiction", "children fiction",
-    # nonfiction categories
+    # nonfiction
     "biography memoir", "history nonfiction", "science popular",
     "self help personal development", "business leadership",
     "psychology cognitive", "philosophy ethics", "economics finance",
@@ -148,7 +125,6 @@ GENRE_CONSENSUS = 1
 
 @dataclass
 class BookRecord:
-    """Intermediate record from one source. Multiple records merge into one row."""
     source:       str
     isbn:         str
     title:        str          = ""
@@ -166,7 +142,6 @@ class BookRecord:
 # ══════════════════════════════════════════════════════════════════════════════
 
 def clean(text: Optional[str]) -> str:
-    """Strip HTML, decode entities, normalize whitespace, remove control chars."""
     if not text:
         return ""
     text = html.unescape(str(text))
@@ -229,10 +204,7 @@ def consensus_genres(records: List[BookRecord]) -> List[str]:
     return ordered or ["General"]
 
 
-# ══════════════════════════════════════════════════════════════════════════════
 # HTTP session
-# ══════════════════════════════════════════════════════════════════════════════
-
 BROWSER_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "

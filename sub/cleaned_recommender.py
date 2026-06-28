@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 from pathlib import Path
 from typing import Optional
 
 import numpy as np
 import pandas as pd
 from scipy import sparse
-from sklearn.feature_extraction.text import TfidfVectorizer
+from nltk.stem import PorterStemmer
+from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS, TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 try:
@@ -17,9 +19,38 @@ except ImportError:  # pragma: no cover - notebook dependency check handles this
 
 
 BASE_DIR = Path(__file__).resolve().parent
-DATA_PATH = BASE_DIR / "books_cleaned_updated.csv"
+DATA_PATH = BASE_DIR / "books_balanced.csv"
 SENTENCE_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 SENTENCE_MODEL_CACHE_DIR = BASE_DIR / "models" / "all-MiniLM-L6-v2"
+
+TOKEN_PATTERN = re.compile(r"[A-Za-z]+")
+
+
+def tokenize_text(value: str) -> list[str]:
+    if not isinstance(value, str):
+        return []
+
+    tokens = TOKEN_PATTERN.findall(value.lower())
+    return [token for token in tokens if token not in ENGLISH_STOP_WORDS]
+
+STEMMER = PorterStemmer()
+
+def stem_tokens(tokens: list[str]) -> list[str]:
+    return [STEMMER.stem(token) for token in tokens]
+
+
+def prepare_recommendation_text(row: pd.Series | dict) -> str:
+    if hasattr(row, "get"):
+        parts = [
+            str(row.get(col, ""))
+            for col in ["title", "authors", "publisher", "genre", "description"]
+        ]
+    else:
+        parts = [str(row)]
+
+    text = " ".join(parts)
+    tokens = stem_tokens(tokenize_text(text))
+    return " ".join(tokens)
 
 
 def load_books(path: Path = DATA_PATH) -> pd.DataFrame:
@@ -53,6 +84,126 @@ def sample_rows_per_genre(frame: pd.DataFrame, sample_per_genre: int = 20) -> pd
 
     sampled = pd.concat(sampled_parts, ignore_index=True) if sampled_parts else prepared.iloc[0:0].copy()
     return sampled.reset_index(drop=True)
+
+
+def sample_one_per_target_genre(
+    frame: pd.DataFrame,
+    target_genres: list[str] | None = None,
+) -> pd.DataFrame:
+    """Return exactly one representative book per target genre.
+
+    Books are matched case-insensitively against the semicolon-separated
+    genre column.  Among candidates for each genre the first alphabetically
+    by title is chosen.  A book already selected for a previous genre is
+    skipped so every row in the result is unique.  Genres with no matching
+    book are silently omitted.  The returned DataFrame adds a
+    ``sampled_for_genre`` column indicating which target genre each row
+    represents.
+    """
+    if target_genres is None:
+        target_genres = [
+            "Fiction",
+            "Children",
+            "Romance",
+            "Mystery",
+            "Horror",
+            "Science Fiction",
+            "Fantasy",
+        ]
+
+    prepared = frame.copy()
+    prepared["genre"] = prepared["genre"].fillna("").astype(str)
+    prepared["title"] = prepared["title"].fillna("").astype(str)
+
+    sort_cols = [c for c in ["book_id", "title"] if c in prepared.columns]
+    prepared = prepared.sort_values(sort_cols, kind="mergesort").reset_index(drop=True)
+
+    seen_indices: set[int] = set()
+    parts: list[pd.DataFrame] = []
+    for genre_token in target_genres:
+        mask = prepared["genre"].str.contains(genre_token, case=False, regex=False)
+        candidates = prepared[mask & ~prepared.index.isin(seen_indices)]
+        if candidates.empty:
+            continue
+        chosen = candidates.iloc[[0]].copy()
+        chosen["sampled_for_genre"] = genre_token
+        seen_indices.add(chosen.index[0])
+        parts.append(chosen)
+
+    if not parts:
+        return frame.iloc[0:0].copy()
+    return pd.concat(parts, ignore_index=True)
+
+
+def build_round_robin_genre_samples(frame: pd.DataFrame) -> list[pd.DataFrame]:
+    """Build round-robin genre samples (1 row per genre per round).
+
+    The function returns a list of sampled DataFrames. Each DataFrame is one
+    round containing at most one item for every genre token.
+    """
+    prepared = frame.copy()
+    prepared["genre"] = prepared["genre"].fillna("").astype(str)
+    prepared["title"] = prepared["title"].fillna("").astype(str)
+    prepared["_source_idx"] = np.arange(len(prepared))
+    prepared["_genre_tokens"] = prepared["genre"].apply(lambda value: sorted(split_genres(value)))
+
+    exploded = prepared.explode("_genre_tokens").rename(columns={"_genre_tokens": "genre_token"})
+    exploded = exploded[exploded["genre_token"].astype(str).str.strip() != ""].copy()
+    if exploded.empty:
+        return []
+
+    sort_columns = [col for col in ["genre_token", "book_id", "title", "_source_idx"] if col in exploded.columns]
+    exploded = exploded.sort_values(sort_columns, kind="mergesort").reset_index(drop=True)
+
+    genre_order = sorted(exploded["genre_token"].dropna().astype(str).unique().tolist())
+    grouped_records: dict[str, list[dict]] = {
+        genre: exploded[exploded["genre_token"] == genre].to_dict("records")
+        for genre in genre_order
+    }
+    pointers = {genre: 0 for genre in genre_order}
+
+    rounds: list[pd.DataFrame] = []
+    while True:
+        picked_rows: list[dict] = []
+        used_sources: set[int] = set()
+        used_titles: set[str] = set()
+
+        for genre in genre_order:
+            candidates = grouped_records[genre]
+            pointer = pointers[genre]
+
+            while pointer < len(candidates):
+                candidate = candidates[pointer]
+                pointer += 1
+
+                source_idx = int(candidate.get("_source_idx", -1))
+                normalized_title = str(candidate.get("title", "")).strip().lower()
+
+                if source_idx in used_sources:
+                    continue
+                if normalized_title and normalized_title in used_titles:
+                    continue
+
+                row = dict(candidate)
+                row["genre_label"] = str(genre).title()
+                picked_rows.append(row)
+                used_sources.add(source_idx)
+                if normalized_title:
+                    used_titles.add(normalized_title)
+                break
+
+            pointers[genre] = pointer
+
+        if not picked_rows:
+            break
+
+        round_df = pd.DataFrame(picked_rows)
+        for helper_col in ["_source_idx", "genre_token"]:
+            if helper_col in round_df.columns:
+                round_df = round_df.drop(columns=[helper_col])
+        rounds.append(round_df.reset_index(drop=True))
+
+    return rounds
 
 
 def split_by_genre_holdout(frame: pd.DataFrame, train_ratio: float = 0.8) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -126,9 +277,8 @@ class CleanedGenreDescriptionRecommender:
             + prepared["genre"]
             + " "
             + prepared["description"]
-            + " "
-            + prepared["published_year"].astype(int).astype(str)
         ).str.replace(r"\s+", " ", regex=True).str.strip()
+        prepared["text_features"] = prepared["text_features"].apply(prepare_recommendation_text)
         return prepared.reset_index(drop=True)
 
     def fit(self, df: pd.DataFrame) -> None:
@@ -136,7 +286,7 @@ class CleanedGenreDescriptionRecommender:
         text_data = self.df["text_features"].fillna("").astype(str)
 
         self.vectorizer = TfidfVectorizer(
-            max_features=20000,
+            max_features=50,
             ngram_range=(1, 2),
             stop_words="english",
             sublinear_tf=True,
@@ -180,12 +330,9 @@ class CleanedGenreDescriptionRecommender:
             raise RuntimeError("Model has not been fitted")
 
         if hasattr(record, "get"):
-            row = record
-            text_features = " ".join(
-                str(row.get(col, "")) for col in ["title", "authors", "publisher", "genre", "description", "published_year"]
-            )
+            text_features = prepare_recommendation_text(record)
         else:
-            text_features = str(record)
+            text_features = prepare_recommendation_text({"title": str(record)})
 
         query_matrix = self.vectorizer.transform([text_features])
         scores = cosine_similarity(query_matrix, self.feature_matrix).ravel()
@@ -245,9 +392,8 @@ class SentenceTransformerGenreDescriptionRecommender:
             + prepared["genre"]
             + " "
             + prepared["description"]
-            + " "
-            + prepared["published_year"].astype(int).astype(str)
         ).str.replace(r"\s+", " ", regex=True).str.strip()
+        prepared["text_features"] = prepared["text_features"].apply(prepare_recommendation_text)
         return prepared.reset_index(drop=True)
 
     def fit(self, df: pd.DataFrame) -> None:
@@ -288,7 +434,7 @@ class SentenceTransformerGenreDescriptionRecommender:
         scores[idx] = -1.0
         top_indices = np.argsort(scores)[::-1][:top_n]
 
-        columns = [c for c in ["book_id", "title", "authors", "publisher", "genre", "description", "cover_image_url"] if c in self.df.columns]
+        columns = [c for c in ["book_id", "title", "authors", "publisher", "description"] if c in self.df.columns]
         recs = self.df.loc[top_indices, columns].copy()
         recs["similarity_score"] = scores[top_indices]
         return recs.reset_index(drop=True)
@@ -298,12 +444,9 @@ class SentenceTransformerGenreDescriptionRecommender:
             raise RuntimeError("Model has not been fitted")
 
         if hasattr(record, "get"):
-            row = record
-            text_features = " ".join(
-                str(row.get(col, "")) for col in ["title", "authors", "publisher", "genre", "description", "published_year"]
-            )
+            text_features = prepare_recommendation_text(record)
         else:
-            text_features = str(record)
+            text_features = prepare_recommendation_text({"title": str(record)})
 
         query_embedding = self.model.encode([text_features], convert_to_numpy=True, normalize_embeddings=True, show_progress_bar=False)[0]
         scores = self.embedding_matrix @ query_embedding

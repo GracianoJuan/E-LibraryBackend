@@ -1,0 +1,4 @@
+scope,average_precision,average_recall
+Genre samples,0.857142857142857,0.8785714285714284
+Genre combination samples,0.8303030303030302,0.875
+Overall,0.835,0.8756410256410257

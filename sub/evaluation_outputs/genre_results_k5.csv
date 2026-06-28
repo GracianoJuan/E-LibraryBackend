@@ -1,0 +1,8 @@
+genre_label,title,recommendations,precision@5,recall@5
+Children,Dragonflight,"The Stars, Like Dust | Dork Diaries 15 | The variable man, and other stories | Radio Free Albemuth | The Scarlet Plague",1.0,1.0
+Fantasy,The Sea Fairies,"The little white bird, or, Adventures in Kensington gardens | David Crockett | The River of Adventure | The Valley of Adventure | The Circus of Adventure",0.8,0.8
+Fiction,The Kingdom of Fantasy,"The little white bird, or, Adventures in Kensington gardens | The River of Adventure | The Island of Adventure | The Valley of Adventure | Dork Diaries 15",1.0,1.0
+Horror,One By One,Behind her eyes | White nights | Full moon horror | The Circus of Adventure | After I do,1.0,1.0
+Mystery,The Secret Adversary,"Stardust | The Woods | The Lamb | The Stars, Like Dust | White nights",0.8,0.8
+Romance,Under Your Scars,"White nights | Dracul | The little white bird, or, Adventures in Kensington gardens | After I do | The Woods",0.6,0.75
+Science Fiction,Second Foundation,"The Puppet Masters | The Stars, Like Dust | Radio Free Albemuth | The Scarlet Plague | Stardust",0.8,0.8

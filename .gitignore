@@ -5,4 +5,5 @@ _init_.py
 dataset
 .env
 *.ipynb
-/cbf
+/cbf_old
+sub/results*

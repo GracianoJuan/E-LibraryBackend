@@ -14,13 +14,14 @@ from models.genre import Genre
 from models.publisher import Publisher
 
 
+
 async def migrate_csv_to_database():
     """Migrate books from CSV to PostgreSQL database"""
     base_path = Path(__file__).resolve().parents[1]
 
     # Read CSV file
     csv_candidates = [
-        base_path / "sub" / "books_cleaned.csv"
+        base_path / "migrations" / "books_migrate.csv"
     ]
     csv_path = next((path for path in csv_candidates if path.exists()), None)
     if csv_path is None:
@@ -35,7 +36,7 @@ async def migrate_csv_to_database():
         return
     
     # Read CSV
-    df = pd.read_csv(csv_path)
+    df = pd.read_csv(csv_path, encoding='utf-8', encoding_errors='replace', dtype={'isbn': str})
 
     def get_first_text(row, *keys: str) -> str:
         for key in keys:
@@ -47,10 +48,6 @@ async def migrate_csv_to_database():
     
     # Get async session
     async with AsyncSession(engine) as session:
-        statement = select(Book.isbn)
-        result = await session.exec(statement)
-        existing_isbns = {isbn for isbn in result.all() if isbn}
-
         author_cache: dict[str, int] = {}
         genre_cache: dict[str, int] = {}
         publisher_cache: dict[str, int] = {}
@@ -76,23 +73,17 @@ async def migrate_csv_to_database():
             return existing_item.id
 
         # Process each row
-        books_to_add = []
-        all_isbns: list[str] = []
+        books_added = 0
         for _, row in df.iterrows():
             title = str(row.get("title", "")).strip()
+            lang = str(row.get("lang", "")).strip()
             isbn = str(row.get("isbn", "")).strip()
             author_name = str(row.get("authors", "")).strip()
             publisher_name = str(row.get("publisher", "")).strip()
             image_url = get_first_text(row, "cover_image_url", "cover_url_openlibrary", "image_url")
             description = str(row.get("description", "")).strip()
             publish_year = get_first_text(row, "published_year", "publish_year")
-            raw_genres = get_first_text(row, "genre", "genres")
- 
-            if not isbn or isbn in existing_isbns:
-                all_isbns.append(isbn)
-                continue
-
-            all_isbns.append(isbn)
+            genre_text = get_first_text(row, "genre", "genres") or "General"
 
             author_id = await get_or_create_lookup_id(Author, author_name, author_cache)
             publisher_id = await get_or_create_lookup_id(Publisher, publisher_name, publisher_cache)
@@ -104,10 +95,11 @@ async def migrate_csv_to_database():
                     publish_year_int = int(publish_year)
                 except (ValueError, TypeError):
                     publish_year_int = None
-    
+
             book = Book(
                 title=title,
-                isbn=isbn,
+                lang=lang,
+                isbn=isbn if isbn else None,
                 author_id=author_id,
                 publisher_id=publisher_id,
                 image_url=image_url,
@@ -117,38 +109,17 @@ async def migrate_csv_to_database():
                 total_likes=0,
                 total_readers=0,
             )
-            books_to_add.append(book)
-            existing_isbns.add(isbn)
-        
-        # Add all books to session and commit
-        for book in books_to_add:
             session.add(book)
-        
-        await session.commit()
-
-        # Reload persisted Book objects from the database so we can create
-        # genre links for both newly inserted and already-existing books.
-        statement = select(Book).where(Book.isbn.in_(all_isbns)) if all_isbns else select(Book)
-        result = await session.exec(statement)
-        persisted_books = result.all()
-        book_lookup = {b.isbn: b for b in persisted_books}
-
-        for _, row in df.iterrows():
-            isbn = str(row.get("isbn", "")).strip()
-            book = book_lookup.get(isbn)
-            if not book:
-                continue
-
-            genre_text = get_first_text(row, "genre", "genres")
-            if not genre_text:
-                genre_text = "General"
+            await session.flush()  # get book.id before adding genres
 
             for genre_name in [part.strip() for part in genre_text.split(";") if part.strip()]:
                 genre_id = await get_or_create_lookup_id(Genre, genre_name, genre_cache)
                 session.add(BookGenre(book_id=book.id, genre_id=genre_id))
 
+            books_added += 1
+
         await session.commit()
-        print(f"Successfully migrated {len(books_to_add)} books from CSV to database")
+        print(f"Successfully migrated {books_added} books from CSV to database")
 
 
 if __name__ == "__main__":

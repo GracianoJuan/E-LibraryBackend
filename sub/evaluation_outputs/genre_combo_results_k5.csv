@@ -1,0 +1,34 @@
+genre_combo_label,title,recommendations,precision@5,recall@5
+Adventure / Fiction / Science / Science Fiction,"The Stars, Like Dust",One True Loves | Stardust | Hooked | The River of Adventure | The Valley of Adventure,1.0,1.0
+Adventure / Fiction / Science / Science Fiction / Travel,"The variable man, and other stories","The Valley of Adventure | The River of Adventure | The Sea Fairies | The Castle of Adventure | The little white bird, or, Adventures in Kensington gardens",0.0,0.0
+Art / Fiction / Horror,The Great God Pan,The Valley of Adventure | The River of Adventure | Stardust | The Sea Fairies | Hooked,1.0,1.0
+Art / Fiction / Mystery / Thriller,White nights,Free air | The River of Adventure | The Valley of Adventure | The Castle of Adventure | Stardust,1.0,1.0
+Biography / Fiction / Music / Nonfiction,David Crockett,Stardust | Hooked | The River of Adventure | The Valley of Adventure | One True Loves,1.0,1.0
+Children / Fantasy / Fiction,The Kingdom of Fantasy,"The River of Adventure | The Valley of Adventure | The little white bird, or, Adventures in Kensington gardens | The Sea Fairies | The Castle of Adventure",1.0,1.0
+Children / Fantasy / Fiction / Music,Alanna,"The Castle of Adventure | The River of Adventure | The Valley of Adventure | The little white bird, or, Adventures in Kensington gardens | The Sea Fairies",1.0,1.0
+Children / Fantasy / Fiction / Science / Science Fiction / Travel,Dragonflight,One True Loves | The River of Adventure | Hooked | The Valley of Adventure | Free air,0.4,0.4
+Children / Fiction,The Island of Adventure,"The River of Adventure | The Valley of Adventure | The Castle of Adventure | The Sea Fairies | The little white bird, or, Adventures in Kensington gardens",1.0,1.0
+Children / Fiction / Horror,Full moon horror,"The River of Adventure | The Castle of Adventure | The Sea Fairies | The Valley of Adventure | The little white bird, or, Adventures in Kensington gardens",1.0,1.0
+Children / Fiction / Mystery,The Circus of Adventure,The River of Adventure | The Castle of Adventure | The Valley of Adventure | The Sea Fairies | One True Loves,1.0,1.0
+Children / Fiction / Mystery / Thriller,The Woods,"The River of Adventure | One True Loves | Stardust | The Valley of Adventure | The little white bird, or, Adventures in Kensington gardens",1.0,1.0
+Children / Fiction / Travel,Dork Diaries 15,"The River of Adventure | The Valley of Adventure | The little white bird, or, Adventures in Kensington gardens | The Castle of Adventure | The Sea Fairies",1.0,1.0
+Fantasy / Fiction,Assassin's Apprentice,One True Loves | Stardust | Hooked | The Valley of Adventure | The River of Adventure,1.0,1.0
+Fiction,The Life and Adventures of Nicholas Nickleby,Stardust | One True Loves | The River of Adventure | The Valley of Adventure | The Sea Fairies,1.0,1.0
+Fiction / Health / Mystery,The Secret Adversary,One True Loves | Stardust | The Sea Fairies | The Castle of Adventure | Hooked,1.0,1.0
+Fiction / Historical Fiction / Horror / Thriller,Dracul,One True Loves | The Sea Fairies | Hooked | Stardust | Free air,0.8,0.8
+Fiction / History / Horror / Thriller,The Jewel of Seven Stars,The River of Adventure | Stardust | The Valley of Adventure | Hooked | One True Loves,1.0,1.0
+Fiction / History / Philosophy / Science / Science Fiction,Second Foundation,Hooked | One True Loves | The River of Adventure | Stardust | The Sea Fairies,0.0,0.0
+Fiction / History / Science / Science Fiction,The Scarlet Plague,Hooked | The River of Adventure | Stardust | One True Loves | The Valley of Adventure,1.0,1.0
+Fiction / Horror,The Lamb,The Valley of Adventure | The River of Adventure | Stardust | The Castle of Adventure | One True Loves,1.0,1.0
+Fiction / Horror / Mystery / Philosophy / Thriller,One By One,"One True Loves | The Sea Fairies | The little white bird, or, Adventures in Kensington gardens | The River of Adventure | Stardust",0.0,0.0
+Fiction / Medicine / Philosophy,La Peste,"The Sea Fairies | The little white bird, or, Adventures in Kensington gardens | The Valley of Adventure | The River of Adventure | Stardust",1.0,1.0
+Fiction / Mystery / Philosophy / Thriller,Behind her eyes,Hooked | The Valley of Adventure | One True Loves | The River of Adventure | Stardust,1.0,1.0
+Fiction / Philosophy / Psychology / Romance,After I do,"One True Loves | Hooked | Stardust | The Sea Fairies | The little white bird, or, Adventures in Kensington gardens",0.8,0.8
+Fiction / Politics / Science / Science Fiction,Radio Free Albemuth,The Valley of Adventure | The River of Adventure | The Castle of Adventure | Hooked | One True Loves,1.0,1.0
+Fiction / Psychology,Giovanni's Room,"Hooked | One True Loves | The little white bird, or, Adventures in Kensington gardens | The Sea Fairies | Stardust",1.0,1.0
+Fiction / Romance,Ugly Love,One True Loves | Hooked | Stardust | The Valley of Adventure | Free air,1.0,1.0
+Fiction / Romance / Young Adult,It Starts with Us,One True Loves | Hooked | Stardust | The Sea Fairies | Free air,1.0,1.0
+Fiction / Science / Science Fiction,The Puppet Masters,"One True Loves | Hooked | Stardust | The little white bird, or, Adventures in Kensington gardens | The Sea Fairies",1.0,1.0
+Fiction / Travel,Less,One True Loves | Stardust | Hooked | The Sea Fairies | The Valley of Adventure,1.0,1.0
+Health / Mystery / Psychology / Romance / Thriller,Under Your Scars,"The Sea Fairies | The little white bird, or, Adventures in Kensington gardens | Hooked | One True Loves | Stardust",0.0,
+Romance / Sports / Young Adult,Icebreaker,Hooked | One True Loves | Stardust | The Sea Fairies | The Valley of Adventure,0.4,1.0
