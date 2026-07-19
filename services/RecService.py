@@ -11,9 +11,10 @@ from models.book import Book
 
 import sys
 
-# Add cbf to path
-cbf_path = Path(__file__).parent.parent / "cbf"
-sys.path.insert(0, str(cbf_path))
+# Add recommender modules to path
+backend_root = Path(__file__).parent.parent
+for module_path in (backend_root / "sub", backend_root / "cbf"):
+    sys.path.insert(0, str(module_path))
 
 
 class RecommendationService:
